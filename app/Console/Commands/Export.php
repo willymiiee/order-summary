@@ -64,16 +64,21 @@ class Export extends Command
      */
     public function handle()
     {
-        $this->output->title('Fetching file from s3');
+        $filename = $this->ask('What is your preferred output file name?');
+
+        $this->line('Fetching file from s3...');
         $filePath = Storage::disk('s3')->url('challenge-1-in.jsonl');
         $file = download_from_s3('application/json', $filePath);
 
-        $this->output->title('Converting into array');
+        $this->line('Converting into array...');
         $json = (new JsonLines())->deline($file);
         $datas = json_decode($json, true);
         $results = [];
 
-        $this->output->title('Calculating');
+        $this->line('Formatting data...');
+        $bar = $this->output->createProgressBar(count($datas));
+        $bar->start();
+
         foreach ($datas as $d) {
             $price = gross_value($d['items'], 'quantity', 'unit_price');
             $price = after_discount($price, $d['discounts']);
@@ -83,11 +88,15 @@ class Export extends Command
             }
 
             $results[] = $this->formatResult($d, $price);
+            $bar->advance();
         }
 
-        $this->output->title('Starting export');
+        $bar->finish();
+
+        $this->line('');
+        $this->line('Starting export...');
         $export = new OrderExport($results);
-        $this->output->success('Export successful');
-        return Excel::store($export, 'out.csv');
+        $this->output->success('Export successful!');
+        return Excel::store($export, $filename . '.csv');
     }
 }
